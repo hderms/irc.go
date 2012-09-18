@@ -1,6 +1,7 @@
 package main
 
 import (
+
 	"bufio"
 	"fmt"
 	"github.com/wsxiaoys/colors"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"./redis_handler"
 )
 
 type User struct {
@@ -86,13 +88,15 @@ type IRCServer struct {
 	Write, Read chan string
 	Messages    chan string
 	user        *User
+  redis_handler *redis_handler.RedisHandler
 }
 
 func NewIRCServer() *IRCServer {
 	write := make(chan string)
 	read := make(chan string)
 	messages := make(chan string)
-	return &IRCServer{Read: read, Write: write, Messages: messages}
+  our_redis := redis_handler.NewRedisHandler("tcp:127.0.0.1:6379", "irc_channel")
+  return &IRCServer{Read: read, Write: write, Messages: messages, redis_handler: our_redis}
 }
 func (s *IRCServer) initiate_connection(options ...IRCServerOptions) {
 	fmt.Println("Connections to:  ", s.hostname, "on port", s.port)
@@ -109,6 +113,7 @@ func (s *IRCServer) HandleIOConn() {
 	go s.handle_input(r)
 	go s.handle_parsing(w)
 	go s.handle_output(w)
+	go s.handle_messages()
 	time.Sleep(3000 * time.Millisecond)
 
 	//user
@@ -152,9 +157,12 @@ func (s *IRCServer) handle_input(r *bufio.Reader) {
 		if str, err := r.ReadString('\n'); err != nil {
 			check_error(err)
 		} else {
-			s.check_for_pong(string(str))
+			was_ping := s.check_for_pong(string(str))
 			//fmt.Println(string(str))
-			s.Read <- string(str)
+			if !was_ping {
+				s.Messages <- string(str)
+				s.Read <- string(str)
+			}
 
 		}
 
@@ -171,21 +179,29 @@ func (s *IRCServer) handle_output(w *bufio.Writer) {
 
 	}
 }
-func (s *IRCServer) handle_messages(w *bufio.Writer) {
+func (s *IRCServer) handle_messages() {
 	for {
-		_, ok := <-s.Messages
+		msg, ok := <-s.Messages
 		if ok {
+      s.redis_handler.Push(msg)
 
 		}
 	}
 }
-func (s *IRCServer) check_for_pong(str_arr ...string) {
+func (s *IRCServer) check_for_pong(str_arr ...string) (was_pong bool){
+	found_pong := false
 	for _, str := range str_arr {
 		if strings.HasPrefix(str, "PING") {
 			s.Write <- ("PONG" + str[4:len(str)-2])
+			colors.Println("@g" + str + "@w")
+			found_pong = true
+			break 
 		}
+
+		
 	}
 
+		return found_pong
 }
 
 /* main code */
