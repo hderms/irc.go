@@ -1,0 +1,30 @@
+
+<html>
+  <style>
+    .blue {
+      background-color: blue;
+
+
+    }
+  </style>
+  <script src="http://code.jquery.com/jquery-1.8.1.min.js"></script>
+
+
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    $(document).ready(function() {
+    var socket = io.connect('http://localhost:6161');
+    console.log(socket);
+    socket.on('connect', socket.on('push', function (data) {
+      var $_new_msg = $("<div class='blue'>").text(data.message).hide();
+      $("body").append($_new_msg);
+      $_new_msg.fadeIn("slow");
+        console.log(data);
+      
+
+    }));
+  });
+  </script>
+  <body></body>
+</html>
